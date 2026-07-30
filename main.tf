@@ -47,12 +47,14 @@ resource "azurerm_virtual_network_peering" "hub_spoke1" {
   resource_group_name       = azurerm_resource_group.rg.name
   virtual_network_name      = azurerm_virtual_network.vnet["vnet1"].name
   remote_virtual_network_id = azurerm_virtual_network.vnet["vnet2"].id
+
 }
 resource "azurerm_virtual_network_peering" "spoke1_hub" {
   name                      = "peering-spoke1-hub"
   resource_group_name       = azurerm_resource_group.rg.name
   virtual_network_name      = azurerm_virtual_network.vnet["vnet2"].name
   remote_virtual_network_id = azurerm_virtual_network.vnet["vnet1"].id
+  allow_forwarded_traffic   = true
 }
 resource "azurerm_virtual_network_peering" "hub_spoke2" {
   name                      = "peering-hub-spoke2"
@@ -65,6 +67,7 @@ resource "azurerm_virtual_network_peering" "spoke2_hub" {
   resource_group_name       = azurerm_resource_group.rg.name
   virtual_network_name      = azurerm_virtual_network.vnet["vnet3"].name
   remote_virtual_network_id = azurerm_virtual_network.vnet["vnet1"].id
+  allow_forwarded_traffic   = true
 }
 //Create tls ssh private key
 resource "tls_private_key" "ssh_private_key" {
@@ -74,7 +77,7 @@ resource "tls_private_key" "ssh_private_key" {
 
 //Create VM in hub-1
 resource "azurerm_network_interface" "nic_01" {
-  name                = "subnet-${var.application_name}-${var.environment_name}-spoke01"
+  name                = "nic-${var.application_name}-${var.environment_name}-spoke01"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -117,7 +120,7 @@ resource "azurerm_linux_virtual_machine" "vm_01" {
 }
 //Create vm in subnet-2
 resource "azurerm_network_interface" "nic_02" {
-  name                = "subnet-${var.application_name}-${var.environment_name}-spoke02"
+  name                = "nic-${var.application_name}-${var.environment_name}-spoke02"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 
@@ -215,7 +218,25 @@ resource "azurerm_firewall_policy_rule_collection_group" "policy_group" {
       protocols           = ["TCP"]
     }
   }
-
+  network_rule_collection {
+    name     = "net-coll1"
+    priority = 300
+    action   = "Allow"
+    rule {
+      name                  = "vnet2-to-vnet3"
+      source_addresses      = azurerm_subnet.subnets["vnet2"].address_prefixes
+      destination_addresses = azurerm_subnet.subnets["vnet3"].address_prefixes
+      destination_ports     = ["80"]
+      protocols             = ["TCP"]
+    }
+    rule {
+      name                  = "vnet3-to-vnet2"
+      source_addresses      = azurerm_subnet.subnets["vnet3"].address_prefixes
+      destination_addresses = azurerm_subnet.subnets["vnet2"].address_prefixes
+      destination_ports     = ["80"]
+      protocols             = ["TCP"]
+    }
+  }
 }
 //Create user defined route - default route 0.0.0.0/0 for spoke subnets will be firewall applicance
 resource "azurerm_route_table" "route_table" {
