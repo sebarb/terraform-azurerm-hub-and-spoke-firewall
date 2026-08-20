@@ -1,166 +1,119 @@
+//Create resource group
 resource "azurerm_resource_group" "rg" {
   name     = "rg-${var.application_name}-${var.environment_name}"
   location = var.location
 }
+
+//Define locals for vnets
 locals {
   vnets = {
     vnet1 = {
       name  = "hub"
       space = "192.168.0.0/16"
+      subnets = {
+        firewall = {
+          name   = "AzureFirewallSubnet"
+          digits = 8
+          netnum = 1
+        }
+        bastion = {
+          name   = "BastionSubnet"
+          digits = 10
+          netnum = 1
+        }
+      }
     }
     vnet2 = {
       name  = "spoke-01"
       space = "10.1.0.0/16"
+      subnets = {
+        default = {
+          name   = "subnet-01"
+          digits = 8
+          netnum = 1
+        }
+      }
     }
     vnet3 = {
       name  = "spoke-02"
       space = "10.2.0.0/16"
+      role  = "spoke"
+      subnets = {
+        default = {
+          name   = "subnet-01"
+          digits = 8
+          netnum = 1
+        }
+      }
     }
   }
 }
-resource "azurerm_virtual_network" "vnet" {
+//Create network infrastructure
+
+module "vnet" {
+  source              = "./modules/network"
   for_each            = local.vnets
-  name                = "vnet-${var.application_name}-${var.environment_name}-${each.value.name}"
+  vnet_name           = each.value.name
+  application_name    = var.application_name
+  environment_name    = var.environment_name
   location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
-  address_space       = [each.value.space]
+  address_space       = each.value.space
+  subnets             = each.value.subnets
 }
-//Create subnet-1 in each virtual network
-resource "azurerm_subnet" "subnets" {
-  for_each             = local.vnets
-  name                 = "subnet-01"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet[each.key].name
-  address_prefixes     = [cidrsubnet(each.value.space, 8, 1)]
+//Creates the peerings between hub and spokes
+//Perrings hub to spokes
+resource "azurerm_virtual_network_peering" "hub_spokes" {
+  for_each = {
+    for k, v in local.vnets :
+    k => v
+    if k != "vnet1"
+  }
+  name                      = "hub_to_${each.value.name}"
+  resource_group_name       = azurerm_resource_group.rg.name
+  virtual_network_name      = module.vnet["vnet1"].name
+  remote_virtual_network_id = module.vnet[each.key].id
 }
 
-//Create dedicated subnet for the firewall
-resource "azurerm_subnet" "subnetfireall" {
-  name                 = "AzureFirewallSubnet"
-  resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet["vnet1"].name
-  address_prefixes     = [cidrsubnet(local.vnets.vnet1.space, 10, 0)]
-}
-//Create peerings between hub and spokes
-resource "azurerm_virtual_network_peering" "hub_spoke1" {
-  name                      = "peering-hub-spoke1"
+//Peering spokes to hub
+resource "azurerm_virtual_network_peering" "spokes_to_hub" {
+  for_each = {
+    for k, v in local.vnets :
+    k => v
+    if k != "vnet1"
+  }
+  name                      = "hub_to_${each.value.name}"
   resource_group_name       = azurerm_resource_group.rg.name
-  virtual_network_name      = azurerm_virtual_network.vnet["vnet1"].name
-  remote_virtual_network_id = azurerm_virtual_network.vnet["vnet2"].id
+  virtual_network_name      = module.vnet[each.key].name
+  remote_virtual_network_id = module.vnet["vnet1"].id
+}
 
-}
-resource "azurerm_virtual_network_peering" "spoke1_hub" {
-  name                      = "peering-spoke1-hub"
-  resource_group_name       = azurerm_resource_group.rg.name
-  virtual_network_name      = azurerm_virtual_network.vnet["vnet2"].name
-  remote_virtual_network_id = azurerm_virtual_network.vnet["vnet1"].id
-  allow_forwarded_traffic   = true
-}
-resource "azurerm_virtual_network_peering" "hub_spoke2" {
-  name                      = "peering-hub-spoke2"
-  resource_group_name       = azurerm_resource_group.rg.name
-  virtual_network_name      = azurerm_virtual_network.vnet["vnet1"].name
-  remote_virtual_network_id = azurerm_virtual_network.vnet["vnet3"].id
-}
-resource "azurerm_virtual_network_peering" "spoke2_hub" {
-  name                      = "peering-spoke2-hub"
-  resource_group_name       = azurerm_resource_group.rg.name
-  virtual_network_name      = azurerm_virtual_network.vnet["vnet3"].name
-  remote_virtual_network_id = azurerm_virtual_network.vnet["vnet1"].id
-  allow_forwarded_traffic   = true
-}
+
 //Create tls ssh private key
 resource "tls_private_key" "ssh_private_key" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
-//Create VM in hub-1
-resource "azurerm_network_interface" "nic_01" {
-  name                = "nic-${var.application_name}-${var.environment_name}-spoke01"
+
+module "vm" {
+  source = "./modules/compute"
+  for_each = {
+    for k, v in local.vnets :
+    k => v
+    if k != "vnet1"
+  }
+  application_name    = var.application_name
+  environment_name    = var.environment_name
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
+  vm_scope            = "web"
+  vm_number           = substr(each.value.name, 6, 2)
+  subnet_id           = module.vnet[each.key].subnets["default"].id
+  file_config         = filebase64("./webapp-config.yaml")
 
-  ip_configuration {
-    name                          = "ipconfig-spoke01"
-    subnet_id                     = azurerm_subnet.subnets["vnet2"].id
-    private_ip_address_allocation = "Dynamic"
-  }
 }
 
-resource "azurerm_linux_virtual_machine" "vm_01" {
-  name                            = "vm-${var.application_name}-${var.environment_name}-spoke01"
-  resource_group_name             = azurerm_resource_group.rg.name
-  location                        = azurerm_resource_group.rg.location
-  size                            = "Standard_B1s"
-  disable_password_authentication = false
-  admin_username                  = "localadmin"
-  admin_password                  = var.password
-  network_interface_ids = [
-    azurerm_network_interface.nic_01.id,
-  ]
-  /*
-  admin_ssh_key {
-    username   = "adminuser"
-    public_key = file("~/.ssh/id_rsa.pub")
-  }
-*/
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
-    version   = "latest"
-  }
-  custom_data = base64encode(file("./webapp-config.yaml"))
-}
-//Create vm in subnet-2
-resource "azurerm_network_interface" "nic_02" {
-  name                = "nic-${var.application_name}-${var.environment_name}-spoke02"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-
-  ip_configuration {
-    name                          = "ipconfig-spoke02"
-    subnet_id                     = azurerm_subnet.subnets["vnet3"].id
-    private_ip_address_allocation = "Dynamic"
-  }
-}
-
-resource "azurerm_linux_virtual_machine" "vm_02" {
-  name                            = "vm-${var.application_name}-${var.environment_name}-spoke02"
-  resource_group_name             = azurerm_resource_group.rg.name
-  location                        = azurerm_resource_group.rg.location
-  size                            = "Standard_B1s"
-  admin_username                  = "localadmin"
-  admin_password                  = var.password
-  disable_password_authentication = false
-  network_interface_ids = [
-    azurerm_network_interface.nic_02.id,
-  ]
-  /*
-  admin_ssh_key {
-    username   = "adminuser"
-    public_key = file("~/.ssh/id_rsa.pub")
-  }
-*/
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts"
-    version   = "latest"
-  }
-  custom_data = base64encode(file("./webapp-config.yaml"))
-}
 //Create public IP
 resource "azurerm_public_ip" "public_ip" {
   name                = "publicip-${var.application_name}-${var.environment_name}"
@@ -170,97 +123,69 @@ resource "azurerm_public_ip" "public_ip" {
   zones               = [1]
 }
 
-//Azure firewall
-resource "azurerm_firewall_policy" "firewall_policy" {
-  name                = "fw-policy-${var.application_name}-${var.environment_name}"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-}
-
-
-resource "azurerm_firewall" "azure_firewall" {
-  name                = "firewall-${var.application_name}-${var.environment_name}"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  sku_name            = "AZFW_VNet"
-  sku_tier            = "Standard"
-  firewall_policy_id  = azurerm_firewall_policy.firewall_policy.id
-  ip_configuration {
-    name                 = "configuration"
-    subnet_id            = azurerm_subnet.subnetfireall.id
-    public_ip_address_id = azurerm_public_ip.public_ip.id
+//Create firewall
+module "firewall" {
+  for_each = {
+    for k, v in local.vnets :
+    k => v
+    if k == "vnet1"
   }
-}
-resource "azurerm_firewall_policy_rule_collection_group" "policy_group" {
-  name               = "policy-group"
-  firewall_policy_id = azurerm_firewall_policy.firewall_policy.id
-  priority           = 200
-  nat_rule_collection {
-    name     = "nat-col1"
-    priority = 200
-    action   = "Dnat"
-    rule {
-      name                = "nat-spoke1"
-      source_addresses    = ["*"]
+  source              = "./modules/firewall"
+  application_name    = var.application_name
+  environment_name    = var.environment_name
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  subnet_id           = module.vnet[each.key].subnets["firewall"].id
+  public_ip_id        = azurerm_public_ip.public_ip.id
+  public_ip_address   = azurerm_public_ip.public_ip.ip_address
+  nat_rules = {
+    spoke01 = {
+      name                = "spoke1"
       destination_address = azurerm_public_ip.public_ip.ip_address
       destination_ports   = ["8080"]
-      translated_address  = azurerm_network_interface.nic_01.ip_configuration[0].private_ip_address
       translated_port     = "80"
+      translated_address  = module.vm["vnet2"].vm_ip
       protocols           = ["TCP"]
-    }
-    rule {
-      name                = "nat-spoke2"
       source_addresses    = ["*"]
+    }
+    spoke02 = {
+      name                = "spoke2"
       destination_address = azurerm_public_ip.public_ip.ip_address
       destination_ports   = ["8081"]
-      translated_address  = azurerm_network_interface.nic_02.ip_configuration[0].private_ip_address
       translated_port     = "80"
+      translated_address  = module.vm["vnet3"].vm_ip
       protocols           = ["TCP"]
+      source_addresses    = ["*"]
     }
   }
-  network_rule_collection {
-    name     = "net-coll1"
-    priority = 300
-    action   = "Allow"
-    rule {
-      name                  = "vnet2-to-vnet3"
-      source_addresses      = azurerm_subnet.subnets["vnet2"].address_prefixes
-      destination_addresses = azurerm_subnet.subnets["vnet3"].address_prefixes
+  network_rules = {
+    rule1 = {
+      source_addresses      = module.vnet["vnet2"].subnets["default"].address_prefixes
+      destination_addresses = module.vnet["vnet3"].subnets["default"].address_prefixes
       destination_ports     = ["80"]
       protocols             = ["TCP"]
     }
-    rule {
-      name                  = "vnet3-to-vnet2"
-      source_addresses      = azurerm_subnet.subnets["vnet3"].address_prefixes
-      destination_addresses = azurerm_subnet.subnets["vnet2"].address_prefixes
+    rule2 = {
+      source_addresses      = module.vnet["vnet3"].subnets["default"].address_prefixes
+      destination_addresses = module.vnet["vnet2"].subnets["default"].address_prefixes
       destination_ports     = ["80"]
       protocols             = ["TCP"]
     }
   }
 }
-//Create user defined route - default route 0.0.0.0/0 for spoke subnets will be firewall applicance
-resource "azurerm_route_table" "route_table" {
-  name                = "udr-${var.application_name}-${var.environment_name}"
+
+//Create routing table
+module "routing" {
+  source              = "./modules/routing"
+  application_name    = var.application_name
+  environment_name    = var.environment_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
+  next_hop            = module.firewall["vnet1"].firewall_ip[0].private_ip_address
+  subnet_ids = {
+    for k, v in local.vnets :
+    k => module.vnet[k].subnets["default"].id
+    if k != "vnet1"
+  }
 
-}
-
-resource "azurerm_subnet_route_table_association" "route_table_assoc-1" {
-  route_table_id = azurerm_route_table.route_table.id
-  subnet_id      = azurerm_subnet.subnets["vnet2"].id
-}
-
-resource "azurerm_subnet_route_table_association" "route_table_assoc-2" {
-  route_table_id = azurerm_route_table.route_table.id
-  subnet_id      = azurerm_subnet.subnets["vnet3"].id
-}
-
-resource "azurerm_route" "default_route" {
-  name                   = "route-${var.application_name}-${var.environment_name}-01"
-  resource_group_name    = azurerm_resource_group.rg.name
-  route_table_name       = azurerm_route_table.route_table.name
-  address_prefix         = "0.0.0.0/0"
-  next_hop_type          = "VirtualAppliance"
-  next_hop_in_ip_address = azurerm_firewall.azure_firewall.ip_configuration[0].private_ip_address
 }

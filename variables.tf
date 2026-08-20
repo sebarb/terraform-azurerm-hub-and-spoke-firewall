@@ -7,7 +7,3 @@ variable "environment_name" {
 variable "location" {
   type = string
 }
-variable "password" {
-  type      = string
-  sensitive = true
-}

@@ -1,86 +1,47 @@
 # Azure Secure Network with Network Virtual Appliance
 
-
-Provision a secure Azure networking environment using Terraform, demonstrating how to route traffic through a Linux-based Network Virtual Appliance (NVA) while keeping backend resources isolated from direct Internet access.
-
-The infrastructure includes a Bastion virtual machine for secure administration, User Defined Routes (UDRs), Network Security Groups (NSGs), and a private Apache web server provisioned using cloud-init.
-
-The objective of this project is to ensure that all traffic between the Bastion VM and the private web server is routed through the Linux-based Network Virtual Appliance (NVA).
-
+The project provisions an Azure network infrastructure using Terraform
 
 
 # Architecture
 
+![Architecture](images/topology.png)
+
+
 ```mermaid
-graph TD
-
-Internet((Internet))
-
-subgraph "Azure"
-
-    PIP[Public IP]
-
-    subgraph "Virtual Network"
-
-        subgraph "Frontend Subnet"
-            Bastion[Bastion VM]
-        end
-
-        UDR[User Defined Route]
-
-        subgraph "NVA Subnet"
-            NVA[Linux NVA]
-        end
-
-        subgraph "Backend Subnet"
-            Apache[Apache Web Server]
-        end
-
-        Bastion --> UDR
-        UDR --> NVA
-        NVA --> Apache
-
-    end
-
+graph LR
+subgraph hub ["10.0.0.0/16"]
+firewall["dadada"]
+subnet["bastion"]
 end
 
-Internet --> PIP
+subgraph spoke1 ["10.1.0.0/16"]
+subnet["subne-1"]
+end
 
-PIP --> Bastion
-
+subgraph spoke2 ["10.1.0.0/16"]
+subnet["subnet-1"]
+end
+hub <== peering ==>spoke1
+hub <== peering ==>spoke2
 ```
 
-The Bastion VM is the only virtual machine exposed through a Public IP address.
-
-Traffic destined for the backend subnet is redirected through the Linux-based Network Virtual Appliance using Azure User Defined Routes.
 
 ---
 
 # Validation
-
-From the Bastion VM, the private web server is reachable only through the Network Virtual Appliance.
-
 ```bash
-curl http://192.168.3.4
-
-Hello from 192.168.3.4
-
+curl http://20.86.28.150:8080
+Hello from 10.1.1.4
 ```
 
-Packet forwarding can be verified on the Network Virtual Appliance using tcpdump.
+![alt text](./images/10114.png)
 
 ```bash
-sudo tcpdump -i any host 192.168.3.4
-tcpdump: data link type LINUX_SLL2
-tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
-listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
-16:29:55.567438 eth0  In  IP vmapp01dev-bastion.internal.cloudapp.net > vmapp01dev-webapp.internal.cloudapp.net: ICMP echo request, id 1, seq 1, length 64
-16:29:55.567476 eth0  Out IP vmapp01dev-bastion.internal.cloudapp.net > vmapp01dev-webapp.internal.cloudapp.net: ICMP echo request, id 1, seq 1, length 64
-16:29:55.568346 eth0  In  IP vmapp01dev-webapp.internal.cloudapp.net > vmapp01dev-bastion.internal.cloudapp.net: ICMP echo reply, id 1, seq 1, length 64
-16:29:55.568354 eth0  Out IP vmapp01dev-webapp.internal.cloudapp.net > vmapp01dev-bastion.internal.cloudapp.net: ICMP echo reply, id 1, seq 1, length 64
-
+curl http://20.86.28.150:8081
+Hello from 10.2.1.4
 ```
-
+![alt text](./images/10214.png)
 ---
 
 # Features
@@ -88,13 +49,9 @@ listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144
 - Multiple subnets
 - Network Security Groups
 - User Defined Routes (UDR)
-- Linux Network Virtual Appliance (NVA)
-- IP Forwarding
-- Bastion Virtual Machine
-- Apache Web Server
-- SSH key generation using Terraform TLS Provider
-- Cloud-init provisioning
-- Parameterized deployment using variables
+- Linux VM
+- Azure Firewall and firwall rules
+- Azure Bastion
 
 ---
 
