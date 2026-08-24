@@ -1,0 +1,3 @@
+application_name = "app01"
+environment_name = "dev"
+location         = "westeurope"

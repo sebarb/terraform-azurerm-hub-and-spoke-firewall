@@ -10,20 +10,24 @@ The project provisions an Azure network infrastructure using Terraform
 
 ```mermaid
 graph LR
-subgraph hub ["10.0.0.0/16"]
-firewall["dadada"]
-subnet["bastion"]
+subgraph hub ["hub 10.0.0.0/16"]
+firewall["firewall 192.168.1.0/24"]
+bastion["bastion 192.168.0.0/26"]
 end
 
 subgraph spoke1 ["10.1.0.0/16"]
-subnet["subne-1"]
+subnet-01["subnet-01 10.1.1.0/24"]
 end
 
-subgraph spoke2 ["10.1.0.0/16"]
-subnet["subnet-1"]
+subgraph spoke2 ["10.2.0.0/16"]
+subnet-02["subnet-01 10.2.1.0/24"]
+
 end
+
 hub <== peering ==>spoke1
 hub <== peering ==>spoke2
+Admin ==>bastion
+Internet==>firewall
 ```
 
 
