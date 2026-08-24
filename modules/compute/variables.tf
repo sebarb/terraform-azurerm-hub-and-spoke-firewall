@@ -22,3 +22,7 @@ variable "file_config" {
 variable "subnet_id" {
   type = string
 }
+variable "public_key" {
+  type      = string
+  sensitive = true
+}

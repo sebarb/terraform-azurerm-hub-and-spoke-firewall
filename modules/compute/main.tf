@@ -15,18 +15,18 @@ resource "azurerm_linux_virtual_machine" "vm" {
   resource_group_name             = var.resource_group_name
   location                        = var.location
   size                            = "Standard_B1s"
-  disable_password_authentication = false
   admin_username                  = "localadmin"
-  admin_password                  = "Blablabla123!"
+  disable_password_authentication = true
+
   network_interface_ids = [
     azurerm_network_interface.nic.id,
   ]
-  /*
+
   admin_ssh_key {
-    username   = "adminuser"
-    public_key = file("~/.ssh/id_rsa.pub")
+    username   = "localadmin"
+    public_key = var.public_key
   }
-*/
+
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "Standard_LRS"
@@ -39,4 +39,18 @@ resource "azurerm_linux_virtual_machine" "vm" {
     version   = "latest"
   }
   custom_data = var.file_config
+  identity {
+    type         = "SystemAssigned"
+    identity_ids = []
+  }
 }
+
+resource "azurerm_virtual_machine_extension" "AADLogin" {
+  name                       = "hostname"
+  virtual_machine_id         = azurerm_linux_virtual_machine.vm.id
+  publisher                  = "Microsoft.Azure.ActiveDirectory"
+  type                       = "AADSSHLoginForLinux"
+  type_handler_version       = "1.0"
+  auto_upgrade_minor_version = true
+}
+

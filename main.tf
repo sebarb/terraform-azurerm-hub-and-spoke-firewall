@@ -17,7 +17,7 @@ locals {
           netnum = 1
         }
         bastion = {
-          name   = "BastionSubnet"
+          name   = "AzureBastionSubnet"
           digits = 10
           netnum = 1
         }
@@ -95,7 +95,6 @@ resource "tls_private_key" "ssh_private_key" {
   rsa_bits  = 4096
 }
 
-
 module "vm" {
   source = "./modules/compute"
   for_each = {
@@ -111,7 +110,7 @@ module "vm" {
   vm_number           = substr(each.value.name, 6, 2)
   subnet_id           = module.vnet[each.key].subnets["default"].id
   file_config         = filebase64("./webapp-config.yaml")
-
+  public_key          = tls_private_key.ssh_private_key.public_key_openssh
 }
 
 //Create public IP
@@ -122,7 +121,7 @@ resource "azurerm_public_ip" "public_ip" {
   allocation_method   = "Static"
   zones               = [1]
 }
-
+/*
 //Create firewall
 module "firewall" {
   for_each = {
@@ -187,5 +186,14 @@ module "routing" {
     k => module.vnet[k].subnets["default"].id
     if k != "vnet1"
   }
-
+}
+*/
+//Create bastion
+module "bastion" {
+  source              = "./modules/bastion"
+  application_name    = var.application_name
+  environment_name    = var.environment_name
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_public_ip.public_ip.location
+  subnet_id           = module.vnet["vnet1"].subnets["bastion"].id
 }
