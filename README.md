@@ -1,4 +1,5 @@
 # Azure Secure Network with Network Virtual Appliance
+![Terraform CI](https://github.com/sebarb/terraform-azurerm-hub-and-spoke/actions/workflows/terraform-ci.yml/badge.svg)
 
 The project provisions an Azure network infrastructure using Terraform
 
