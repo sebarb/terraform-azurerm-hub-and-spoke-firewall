@@ -1,0 +1,9 @@
+framework:
+  - terraform
+
+directory:
+  - .
+
+soft-fail: true
+
+compact: true
