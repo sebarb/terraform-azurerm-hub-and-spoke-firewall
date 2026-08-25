@@ -1,3 +1,4 @@
+
 terraform {
   required_providers {
     azurerm = {
@@ -5,11 +6,12 @@ terraform {
       version = "~>4.81.0"
     }
     tls = {
-      source = "hashicorp/azurerm"
+      source = "hashicorp/tls"
       version : "~>4.3.0"
     }
   }
 }
+
 provider "azurerm" {
   features {
 

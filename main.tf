@@ -121,7 +121,7 @@ resource "azurerm_public_ip" "public_ip" {
   allocation_method   = "Static"
   zones               = [1]
 }
-/*
+
 //Create firewall
 module "firewall" {
   for_each = {
@@ -187,7 +187,7 @@ module "routing" {
     if k != "vnet1"
   }
 }
-*/
+
 //Create bastion
 module "bastion" {
   source              = "./modules/bastion"
