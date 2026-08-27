@@ -5,5 +5,7 @@ directory:
   - .
 
 soft-fail: true
-
 compact: true
+
+skip-check:
+  - CKV_AZURE_50   # AADLoginForLinux extension - necesara pt Azure AD auth, fals-pozitiv

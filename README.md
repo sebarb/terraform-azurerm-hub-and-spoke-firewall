@@ -1,9 +1,20 @@
-# Azure Secure Network with Network Virtual Appliance
-
 ![Terraform CI](https://github.com/sebarb/terraform-azurerm-hub-and-spoke-firewall/actions/workflows/terraform-ci.yml/badge.svg)
 
-The project provisions an Azure network infrastructure using Terraform
+# Azure Hub and Spoke architecture with Azure Firewall
 
+The project provisions an Azure network infrastructure using Terraform.
+The goal of the project is to ensure connectivity to internal web servers through Azure Firewall using DNAT: TCP port 8080 is mapped to port 80 of one VM and port 8081 is mapped to port 80 of the second VM.
+
+The infrastructure includes 3 virtual network in hub-and-sopke topology as follows:
+- Hub virtual network which includes two specific subnets: Azure Firewall and Bastion (for administrative purposes)
+- two spoke subnets, in each of it there is one Linux based VM which listens to port TCP 80
+Both spoke virtual networks are connected to hub using pairing - the easiest vnet interconnection way if no other constraints are requested.
+
+The project is modularized in order to allow as flexibility and reusability.
+The network infrastructure is defined through locals mapping.
+
+Connecivity to Vms is allowed only through Bastion, avoiding then any VM port exposure to Internet.
+No password hardcoded as managedidentity and AADLogin extensions are configured on VMs.
 
 # Architecture
 
@@ -65,14 +76,16 @@ Hello from 10.2.1.4
 
 ```text
 .
-├── main.tf
-├── variables.tf
-├── outputs.tf
-├── versions.tf
-├── terraform.tfvars
-├── nva-config.yaml
-├── webapp-config.yaml
-└── README.md
+├__modules
+|___bastion  => Creates Bastion with associated public IP
+|___compute  => Creates VM
+|___network  => Creates network infrastructure
+|___firewall => Creates Azure firewall
+|___routing  => Create user defined route and subnet associations
+|__main.tf
+|__outputs.tf
+|__versions.tf
+|__variables.tf
 ```
 
 ---
@@ -138,22 +151,17 @@ This project demonstrates practical knowledge of:
 - Network Virtual Appliances
 - Linux Virtual Machines
 - Cloud-init
-- SSH key management
 - Terraform variables and outputs
 - Dynamic subnet creation using `for_each`
+- Github Actions CI
+- TFLing integration/Checkov /tfsec security scanning
 
 ---
 
 # Future Improvements
 
-- Refactor into reusable Terraform modules
-- Configure remote state using Azure Storage
-- GitHub Actions CI/CD pipeline
-- Azure Bastion service
 - Azure Monitor & Log Analytics
-- TFLint integration
-- Checkov / tfsec security scanning
-
+- Cost dashboard
 ---
 
 # Terraform Configuration Reference
@@ -165,8 +173,8 @@ The following section is automatically generated using **terraform-docs**.
 
 | Name | Version |
 | ---- | ------- |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >=1.9.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | ~>4.81.0 |
-| <a name="requirement_local"></a> [local](#requirement\_local) | ~>2.9.0 |
 | <a name="requirement_tls"></a> [tls](#requirement\_tls) | ~>4.3.0 |
 
 ## Providers
@@ -174,53 +182,41 @@ The following section is automatically generated using **terraform-docs**.
 | Name | Version |
 | ---- | ------- |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | 4.81.0 |
-| <a name="provider_local"></a> [local](#provider\_local) | 2.9.0 |
 | <a name="provider_tls"></a> [tls](#provider\_tls) | 4.3.0 |
 
 ## Modules
 
-No modules.
+| Name | Source | Version |
+| ---- | ------ | ------- |
+| <a name="module_bastion"></a> [bastion](#module\_bastion) | ./modules/bastion | n/a |
+| <a name="module_firewall"></a> [firewall](#module\_firewall) | ./modules/firewall | n/a |
+| <a name="module_routing"></a> [routing](#module\_routing) | ./modules/routing | n/a |
+| <a name="module_vm"></a> [vm](#module\_vm) | ./modules/compute | n/a |
+| <a name="module_vnet"></a> [vnet](#module\_vnet) | ./modules/network | n/a |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [azurerm_linux_virtual_machine.vm_bastion](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine) | resource |
-| [azurerm_linux_virtual_machine.vm_nva](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine) | resource |
-| [azurerm_linux_virtual_machine.vm_webapp](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine) | resource |
-| [azurerm_network_interface.nic_bastion](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_interface) | resource |
-| [azurerm_network_interface.nic_nva](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_interface) | resource |
-| [azurerm_network_interface.nic_webapp](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_interface) | resource |
-| [azurerm_network_security_group.nsg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group) | resource |
 | [azurerm_public_ip.public_ip](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/public_ip) | resource |
 | [azurerm_resource_group.rg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) | resource |
-| [azurerm_route.route_backward](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/route) | resource |
-| [azurerm_route.route_forward](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/route) | resource |
-| [azurerm_route_table.udr](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/route_table) | resource |
-| [azurerm_subnet.subnets](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) | resource |
-| [azurerm_subnet_network_security_group_association.subnet_nsg](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association) | resource |
-| [azurerm_subnet_route_table_association.front_route](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_route_table_association) | resource |
-| [azurerm_subnet_route_table_association.private_route](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_route_table_association) | resource |
-| [azurerm_virtual_network.vnet](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) | resource |
-| [local_file.ssh_private_file](https://registry.terraform.io/providers/hashicorp/local/latest/docs/resources/file) | resource |
+| [azurerm_virtual_network_peering.hub_spokes](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) | resource |
+| [azurerm_virtual_network_peering.spokes_to_hub](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network_peering) | resource |
 | [tls_private_key.ssh_private_key](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/resources/private_key) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_address_space"></a> [address\_space](#input\_address\_space) | CIDR bloc allocated for the virtual network | `string` | n/a | yes |
-| <a name="input_application_name"></a> [application\_name](#input\_application\_name) | Application name used in azure resurse naming prefix | `string` | n/a | yes |
-| <a name="input_environment_name"></a> [environment\_name](#input\_environment\_name) | n/a | `string` | `"Environment name (dev/prod) used in azure resurse naming prefix"` | no |
-| <a name="input_locations"></a> [locations](#input\_locations) | Azure region where resources will be created | `list(string)` | n/a | yes |
-| <a name="input_subnets"></a> [subnets](#input\_subnets) | maping between subnets names and subnet portion | `map(string)` | n/a | yes |
+| <a name="input_application_name"></a> [application\_name](#input\_application\_name) | n/a | `string` | n/a | yes |
+| <a name="input_environment_name"></a> [environment\_name](#input\_environment\_name) | n/a | `string` | n/a | yes |
+| <a name="input_location"></a> [location](#input\_location) | n/a | `string` | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 | ---- | ----------- |
-| <a name="output_public_ip"></a> [public\_ip](#output\_public\_ip) | Print allocated IP Public address |
-| <a name="output_subnets"></a> [subnets](#output\_subnets) | Print Subnets CIDR blocks |
+| <a name="output_public_ip"></a> [public\_ip](#output\_public\_ip) | n/a |
 <!-- END_TF_DOCS -->
 
 ---
