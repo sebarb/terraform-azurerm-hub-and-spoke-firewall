@@ -5,7 +5,7 @@
 The project provisions an Azure network infrastructure using Terraform.
 The goal of the project is to ensure connectivity to internal web servers through Azure Firewall using DNAT: TCP port 8080 is mapped to port 80 of one VM and port 8081 is mapped to port 80 of the second VM.
 
-The infrastructure includes 3 virtual network in hub-and-sopke topology as follows:
+The infrastructure includes 3 virtual network in hub-and-spoke topology as follows:
 - Hub virtual network which includes two specific subnets: Azure Firewall and Bastion (for administrative purposes)
 - two spoke subnets, in each of it there is one Linux based VM which listens to port TCP 80
 Both spoke virtual networks are connected to hub using pairing - the easiest vnet interconnection way if no other constraints are requested.
@@ -14,7 +14,8 @@ The project is modularized in order to allow as flexibility and reusability.
 The network infrastructure is defined through locals mapping.
 
 Connecivity to Vms is allowed only through Bastion, avoiding then any VM port exposure to Internet.
-No password hardcoded as managedidentity and AADLogin extensions are configured on VMs.
+No password hardcoded: managed identity and AADLogin extensions are configured on VMs.
+All resources are consistently tagged to support governance and cost tracking
 
 # Architecture
 
@@ -64,11 +65,12 @@ Hello from 10.2.1.4
 # Features
 - Azure Virtual Network
 - Multiple subnets
-- Network Security Groups
+- Network Security Groups on every subnet, restricting traffic to what each tier needs 
 - User Defined Routes (UDR)
 - Linux VM
-- Azure Firewall and firwall rules
+- Azure Firewall and firwall rules (DNAT+network rules)
 - Azure Bastion
+- Consisten resource tagging (application, environment, owner) for governance and cost tracking
 
 ---
 
@@ -126,18 +128,18 @@ terraform destroy
 
 # Networking Design
 
-The infrastructure is divided into three logical layers:
+The infrastructure is organized in a hub-and-spoke topology:
 
-- **Frontend Subnet** hosts the Bastion virtual machine.
-- **DMZ Subnet** hosts a Linux virtual machine configured as a Network Virtual Appliance with IP forwarding enabled.
-- **Private Subnet** hosts an Apache web server without direct Internet access.
+- **Hub virtual network** hosts two dedicated subnets: `AzureFirewallSubnet`, running the Azure Firewall instance that centralizes inbound DNAT and inter-spoke traffic inspection, and `AzureBastionSubnet`, running Azure Bastion for administrative access to the VMs.
+- **Spoke virtual networks** (spoke-01 and spoke-02) each host a single subnet with one Linux VM running an Apache web server. Neither VM has a public IP.
 
-User Defined Routes redirect traffic from the frontend subnet to the Linux Network Virtual Appliance, which performs IP forwarding before forwarding packets to the backend subnet.
+Both spokes are peered directly with the hub. A User Defined Route sets the spoke subnets' default route (`0.0.0.0/0`) to the Azure Firewall's private IP, so all outbound and inter-spoke traffic is force-tunneled through the firewall for inspection.
 
-Network Security Groups restrict communication between subnets and enforce network segmentation.
+Inbound access to the web servers is published through Azure Firewall DNAT rules: TCP 8080 → VM1:80 and TCP 8081 → VM2:80 on the firewall's public IP. Firewall network rules explicitly allow the required traffic between the two spokes.
 
+Each subnet also has its own Network Security Group, providing a second layer of segmentation on top of the UDR/firewall routing: the spoke NSGs allow only HTTP traffic from the firewall's subnet and SSH from the Bastion subnet, while the Bastion subnet NSG follows Azure's required baseline rules for Bastion connectivity.
 
-
+Administrative access to the VMs is only possible through Bastion (no SSH/RDP exposed to the Internet), and authentication uses Azure AD login via the AADSSHLoginForLinux extension rather than hardcoded credentials.
 
 ---
 

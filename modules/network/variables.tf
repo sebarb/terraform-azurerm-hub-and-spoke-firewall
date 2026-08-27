@@ -24,3 +24,7 @@ variable "subnets" {
     netnum = number
   }))
 }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

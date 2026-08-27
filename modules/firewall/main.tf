@@ -3,6 +3,7 @@ resource "azurerm_firewall_policy" "firewall_policy" {
   name                = "fw-policy-${var.application_name}-${var.environment_name}"
   resource_group_name = var.resource_group_name
   location            = var.location
+  tags                = var.tags
 }
 
 
@@ -19,6 +20,7 @@ resource "azurerm_firewall" "azure_firewall" {
     subnet_id            = var.subnet_id
     public_ip_address_id = var.public_ip_id
   }
+  tags = var.tags
 }
 
 resource "azurerm_firewall_policy_rule_collection_group" "policy_group" {

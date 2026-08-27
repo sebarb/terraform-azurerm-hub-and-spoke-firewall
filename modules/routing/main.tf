@@ -3,13 +3,14 @@ resource "azurerm_route_table" "route_table" {
   name                = "udr-${var.application_name}-${var.environment_name}"
   resource_group_name = var.resource_group_name
   location            = var.location
-
+  tags                = var.tags
 }
 
 resource "azurerm_subnet_route_table_association" "route_table_assoc" {
   for_each       = var.subnet_ids
   route_table_id = azurerm_route_table.route_table.id
   subnet_id      = each.value
+
 }
 
 

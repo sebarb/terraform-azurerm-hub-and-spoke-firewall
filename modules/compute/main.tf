@@ -9,6 +9,7 @@ resource "azurerm_network_interface" "nic" {
     subnet_id                     = var.subnet_id
     private_ip_address_allocation = "Dynamic"
   }
+  tags = var.tags
 }
 resource "azurerm_linux_virtual_machine" "vm" {
   name                            = "vm-${var.application_name}-${var.environment_name}-${var.vm_scope}-${var.vm_number}"
@@ -43,6 +44,7 @@ resource "azurerm_linux_virtual_machine" "vm" {
     type         = "SystemAssigned"
     identity_ids = []
   }
+  tags = var.tags
 }
 
 resource "azurerm_virtual_machine_extension" "AADLogin" {
@@ -52,5 +54,6 @@ resource "azurerm_virtual_machine_extension" "AADLogin" {
   type                       = "AADSSHLoginForLinux"
   type_handler_version       = "1.0"
   auto_upgrade_minor_version = true
+  tags                       = var.tags
 }
 

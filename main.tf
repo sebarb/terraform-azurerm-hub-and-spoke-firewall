@@ -47,6 +47,11 @@ locals {
       }
     }
   }
+  common_tags = {
+    application = var.application_name
+    environment = var.environment_name
+    managedby   = "terraform"
+  }
 }
 //Create network infrastructure
 
@@ -60,6 +65,7 @@ module "vnet" {
   resource_group_name = azurerm_resource_group.rg.name
   address_space       = each.value.space
   subnets             = each.value.subnets
+  tags                = local.common_tags
 }
 //Creates the peerings between hub and spokes
 //Perrings hub to spokes
@@ -111,6 +117,7 @@ module "vm" {
   subnet_id           = module.vnet[each.key].subnets["default"].id
   file_config         = filebase64("./webapp-config.yaml")
   public_key          = tls_private_key.ssh_private_key.public_key_openssh
+  tags                = local.common_tags
 }
 
 //Create public IP
@@ -120,6 +127,7 @@ resource "azurerm_public_ip" "public_ip" {
   location            = azurerm_resource_group.rg.location
   allocation_method   = "Static"
   zones               = [1]
+  tags                = local.common_tags
 }
 
 //Create firewall
@@ -171,6 +179,7 @@ module "firewall" {
       protocols             = ["TCP"]
     }
   }
+  tags = local.common_tags
 }
 
 //Create routing table
@@ -186,6 +195,7 @@ module "routing" {
     k => module.vnet[k].subnets["default"].id
     if k != "vnet1"
   }
+  tags = local.common_tags
 }
 
 //Create bastion
@@ -196,4 +206,5 @@ module "bastion" {
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_public_ip.public_ip.location
   subnet_id           = module.vnet["vnet1"].subnets["bastion"].id
+  tags                = local.common_tags
 }

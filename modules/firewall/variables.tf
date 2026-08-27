@@ -42,3 +42,7 @@ variable "network_rules" {
   }))
   default = {}
 }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

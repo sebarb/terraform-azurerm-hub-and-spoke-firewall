@@ -16,3 +16,7 @@ variable "next_hop" {
 variable "subnet_ids" {
   type = map(string)
 }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}
