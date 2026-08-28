@@ -2,57 +2,105 @@
 resource "azurerm_resource_group" "rg" {
   name     = "rg-${var.application_name}-${var.environment_name}"
   location = var.location
+  tags     = local.common_tags
 }
 
 //Define locals for vnets
+
 locals {
   vnets = {
     vnet1 = {
       name  = "hub"
       space = "192.168.0.0/16"
       subnets = {
-        firewall = {
-          name   = "AzureFirewallSubnet"
-          digits = 8
-          netnum = 1
-        }
-        bastion = {
-          name   = "AzureBastionSubnet"
-          digits = 10
-          netnum = 1
-        }
+        firewall = { name = "AzureFirewallSubnet", digits = 8, netnum = 1 }
+        bastion  = { name = "AzureBastionSubnet", digits = 10, netnum = 1 }
       }
     }
     vnet2 = {
       name  = "spoke-01"
       space = "10.1.0.0/16"
       subnets = {
-        default = {
-          name   = "subnet-01"
-          digits = 8
-          netnum = 1
-        }
+        default = { name = "subnet-01", digits = 8, netnum = 1 }
       }
     }
     vnet3 = {
       name  = "spoke-02"
       space = "10.2.0.0/16"
-      role  = "spoke"
       subnets = {
-        default = {
-          name   = "subnet-01"
-          digits = 8
-          netnum = 1
-        }
+        default = { name = "subnet-01", digits = 8, netnum = 1 }
       }
     }
   }
+
+  # sursa unica de adevar: CIDR-ul real al fiecarui subnet, calculat automat
+  subnet_cidrs = {
+    for vk, v in local.vnets : vk => {
+      for sk, s in v.subnets : sk => cidrsubnet(v.space, s.digits, s.netnum)
+    }
+  }
+  nsg_subnet_ids = {
+    bastion = module.vnet["vnet1"].subnets["bastion"].id
+    spoke1  = module.vnet["vnet2"].subnets["default"].id
+    spoke2  = module.vnet["vnet3"].subnets["default"].id
+  }
+  firewall_cidr = local.subnet_cidrs.vnet1.firewall
+  bastion_cidr  = local.subnet_cidrs.vnet1.bastion
+
+  nsg_rules = {
+    bastion = [
+      { name              = "AllowHttpsInbound", priority = 120, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "443",
+      source_address_prefix = "Internet", destination_address_prefix = "*" },
+      { name              = "AllowGatewayManagerInbound", priority = 130, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "443",
+      source_address_prefix = "GatewayManager", destination_address_prefix = "*" },
+      { name              = "AllowAzureLoadBalancerInbound", priority = 140, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "443",
+      source_address_prefix = "AzureLoadBalancer", destination_address_prefix = "*" },
+      { name              = "AllowBastionHostCommunication", priority = 150, direction = "Inbound", access = "Allow", protocol = "*",
+        source_port_range = "*", destination_port_range = "8080,5701",
+      source_address_prefix = "VirtualNetwork", destination_address_prefix = "VirtualNetwork" },
+      { name              = "AllowSshRdpOutbound", priority = 100, direction = "Outbound", access = "Allow", protocol = "*",
+        source_port_range = "*", destination_port_range = "22,3389",
+      source_address_prefix = "*", destination_address_prefix = "VirtualNetwork" },
+      { name              = "AllowAzureCloudOutbound", priority = 110, direction = "Outbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "443",
+      source_address_prefix = "*", destination_address_prefix = "AzureCloud" },
+      { name              = "AllowBastionCommOutbound", priority = 120, direction = "Outbound", access = "Allow", protocol = "*",
+        source_port_range = "*", destination_port_range = "8080,5701",
+      source_address_prefix = "VirtualNetwork", destination_address_prefix = "VirtualNetwork" },
+      { name              = "AllowGetSessionInformation", priority = 130, direction = "Outbound", access = "Allow", protocol = "*",
+        source_port_range = "*", destination_port_range = "80",
+      source_address_prefix = "*", destination_address_prefix = "Internet" },
+
+    ]
+    spoke1 = [
+      { name              = "AllowHttpFromFirewall", priority = 100, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "80",
+      source_address_prefix = local.firewall_cidr, destination_address_prefix = "*" },
+      { name              = "AllowSshFromBastion", priority = 110, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "22",
+      source_address_prefix = local.bastion_cidr, destination_address_prefix = "*" },
+    ]
+    spoke2 = [
+      { name              = "AllowHttpFromFirewall", priority = 100, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "80",
+      source_address_prefix = local.firewall_cidr, destination_address_prefix = "*" },
+      { name              = "AllowSshFromBastion", priority = 110, direction = "Inbound", access = "Allow", protocol = "Tcp",
+        source_port_range = "*", destination_port_range = "22",
+      source_address_prefix = local.bastion_cidr, destination_address_prefix = "*" },
+    ]
+  }
+
   common_tags = {
     application = var.application_name
     environment = var.environment_name
     managedby   = "terraform"
   }
 }
+
+
 //Create network infrastructure
 
 module "vnet" {
@@ -94,6 +142,19 @@ resource "azurerm_virtual_network_peering" "spokes_to_hub" {
   remote_virtual_network_id = module.vnet["vnet1"].id
 }
 
+module "nsg" {
+  source   = "./modules/nsg"
+  for_each = local.nsg_rules
+  //name                = "nsg-${each.key}"
+  application_name    = var.application_name
+  environment_name    = var.environment_name
+  vnet_name           = "nsg-${each.key}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = local.nsg_subnet_ids[each.key]
+  security_rules      = each.value
+  tags                = local.common_tags
+}
 
 //Create tls ssh private key
 resource "tls_private_key" "ssh_private_key" {

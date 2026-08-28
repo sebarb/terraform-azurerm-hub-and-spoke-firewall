@@ -41,7 +41,7 @@ end
 hub <== peering ==>spoke1
 hub <== peering ==>spoke2
 Admin ==>bastion
-Internet==>firewall
+Internet== (Public_IP:8080/8081) ==>firewall
 ```
 
 
@@ -60,6 +60,21 @@ curl http://20.86.28.150:8081
 Hello from 10.2.1.4
 ```
 ![alt text](./images/10214.png)
+
+For administrative purpuse there is Bastion using Entra ID Authentication
+Before this, the user should have been assigned with RBAC proper role:
+
+![alt text](./images/rbac_role.png)
+
+Then
+Microsoft Entra ID authentication type will show up in Bastion connect:
+
+![alt text](./images/bastion.png)
+
+User connected to the VM is the Entra ID user:
+
+![alt text](./images/login.png)
+
 ---
 
 # Features
@@ -84,6 +99,7 @@ Hello from 10.2.1.4
 |___network  => Creates network infrastructure
 |___firewall => Creates Azure firewall
 |___routing  => Create user defined route and subnet associations
+|___bsg      => Create Network Security Groups for subnets
 |__main.tf
 |__outputs.tf
 |__versions.tf
