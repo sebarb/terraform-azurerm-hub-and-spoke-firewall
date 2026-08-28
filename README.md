@@ -93,17 +93,19 @@ User connected to the VM is the Entra ID user:
 
 ```text
 .
-├__modules
-|___bastion  => Creates Bastion with associated public IP
-|___compute  => Creates VM
-|___network  => Creates network infrastructure
-|___firewall => Creates Azure firewall
-|___routing  => Create user defined route and subnet associations
-|___bsg      => Create Network Security Groups for subnets
-|__main.tf
-|__outputs.tf
-|__versions.tf
-|__variables.tf
+├── modules
+│   ├── bastion  => Creates Bastion with associated public IP
+│   ├── compute  => Creates VM
+│   ├── network  => Creates network infrastructure
+│   ├── firewall => Creates Azure firewall
+│   ├── routing  => Create user defined route and subnet associations
+│   └── nsg      => Create Network Security Groups for subnets
+├── main.tf
+├── outputs.tf
+├── versions.tf
+└── variables.tf
+
+
 ```
 
 ---
@@ -166,13 +168,13 @@ This project demonstrates practical knowledge of:
 - Infrastructure as Code (Terraform)
 - Azure Virtual Networking
 - User Defined Routes
-- Network Virtual Appliances
+- Azure Firewall
 - Linux Virtual Machines
 - Cloud-init
 - Terraform variables and outputs
 - Dynamic subnet creation using `for_each`
 - Github Actions CI
-- TFLing integration/Checkov /tfsec security scanning
+- TFLing integration/Checkov integration
 
 ---
 
@@ -208,6 +210,7 @@ The following section is automatically generated using **terraform-docs**.
 | ---- | ------ | ------- |
 | <a name="module_bastion"></a> [bastion](#module\_bastion) | ./modules/bastion | n/a |
 | <a name="module_firewall"></a> [firewall](#module\_firewall) | ./modules/firewall | n/a |
+| <a name="module_nsg"></a> [nsg](#module\_nsg) | ./modules/nsg | n/a |
 | <a name="module_routing"></a> [routing](#module\_routing) | ./modules/routing | n/a |
 | <a name="module_vm"></a> [vm](#module\_vm) | ./modules/compute | n/a |
 | <a name="module_vnet"></a> [vnet](#module\_vnet) | ./modules/network | n/a |
